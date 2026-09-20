@@ -223,5 +223,40 @@ export async function updateBookingStatus(req: Request, id: string, status: Book
   existing.status = status
   existing.updatedBy = req.user?.id as unknown as typeof existing.updatedBy
   await existing.save()
-  return existing
+  return getBooking(req, id)
+}
+
+export async function updateBooking(req: Request, id: string, data: {
+  customerId?: string
+  vehicleId?: string
+  serviceType?: string
+  customerComplaint?: string
+  preferredDate?: string
+  preferredSlot?: string
+  pickupRequired?: boolean
+  pickupAddress?: string
+  source?: string
+  remarks?: string
+  status?: BookingStatus
+}) {
+  const existing = await Booking.findOne({ _id: id, tenantId: req.tenantId! })
+  if (!existing) throw new NotFoundError('Booking not found')
+
+  if (data.customerId) existing.customerId = data.customerId as unknown as typeof existing.customerId
+  if (data.vehicleId) existing.vehicleId = data.vehicleId as unknown as typeof existing.vehicleId
+  if (data.serviceType !== undefined) existing.serviceType = data.serviceType
+  if (data.customerComplaint !== undefined) existing.customerComplaint = data.customerComplaint
+  if (data.preferredDate !== undefined) {
+    existing.preferredDate = data.preferredDate ? new Date(data.preferredDate) : undefined
+  }
+  if (data.preferredSlot !== undefined) existing.preferredSlot = data.preferredSlot
+  if (data.pickupRequired !== undefined) existing.pickupRequired = data.pickupRequired
+  if (data.pickupAddress !== undefined) existing.pickupAddress = data.pickupAddress
+  if (data.source !== undefined) existing.source = data.source
+  if (data.remarks !== undefined) existing.remarks = data.remarks
+  if (data.status) existing.status = data.status
+
+  existing.updatedBy = req.user?.id as unknown as typeof existing.updatedBy
+  await existing.save()
+  return getBooking(req, id)
 }

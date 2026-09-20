@@ -56,12 +56,36 @@ router.post('/', async (req, res, next) => {
   }
 })
 
+const updateSchema = z.object({
+  customerId: z.string().min(1).optional(),
+  vehicleId: z.string().min(1).optional(),
+  serviceType: z.string().optional(),
+  customerComplaint: z.string().optional(),
+  preferredDate: z.string().optional(),
+  preferredSlot: z.string().optional(),
+  pickupRequired: z.boolean().optional(),
+  pickupAddress: z.string().optional(),
+  source: z.string().optional(),
+  remarks: z.string().optional(),
+  status: z.enum(['BOOKED', 'CONFIRMED', 'RESCHEDULED', 'CANCELLED', 'ARRIVED', 'NO_SHOW']).optional(),
+})
+
 router.patch('/:id/status', async (req, res, next) => {
   try {
     const { status } = z.object({
       status: z.enum(['BOOKED', 'CONFIRMED', 'RESCHEDULED', 'CANCELLED', 'ARRIVED', 'NO_SHOW']),
     }).parse(req.body)
     const data = await bookingsService.updateBookingStatus(req, req.params.id, status)
+    res.json({ success: true, data })
+  } catch (err) {
+    next(err)
+  }
+})
+
+router.patch('/:id', async (req, res, next) => {
+  try {
+    const body = updateSchema.parse(req.body)
+    const data = await bookingsService.updateBooking(req, req.params.id, body)
     res.json({ success: true, data })
   } catch (err) {
     next(err)
