@@ -82,6 +82,8 @@ export async function createVehicle(req: Request, data: {
   manufacturingYear?: number
   odometer?: number
   imageUrl?: string
+  imagePublicId?: string
+  chassisNo?: string
 }) {
   const customer = await Customer.findOne({ _id: data.customerId, tenantId: req.tenantId! })
   if (!customer) throw new NotFoundError('Customer not found')
@@ -93,7 +95,8 @@ export async function createVehicle(req: Request, data: {
     make: data.make,
     model: data.model,
     variant: data.variant,
-    vin: data.vin,
+    vin: data.vin ?? data.chassisNo,
+    chassisNo: data.chassisNo ?? data.vin,
     engineNo: data.engineNo,
     fuelType: data.fuelType,
     transmission: data.transmission,
@@ -101,8 +104,46 @@ export async function createVehicle(req: Request, data: {
     manufacturingYear: data.manufacturingYear,
     odometer: data.odometer ?? 0,
     imageUrl: data.imageUrl,
+    imagePublicId: data.imagePublicId,
     createdBy: req.user?.id,
   })
 
   return Vehicle.findById(vehicle._id).populate('customerId', 'name').lean()
+}
+
+export async function updateVehicle(req: Request, id: string, data: {
+  engineNo?: string
+  chassisNo?: string
+  vin?: string
+  imageUrl?: string
+  imagePublicId?: string
+  odometer?: number
+  fuelType?: string
+}) {
+  const vehicle = await Vehicle.findOne({ _id: id, tenantId: req.tenantId! })
+  if (!vehicle) throw new NotFoundError('Vehicle not found')
+
+  if (data.engineNo !== undefined) vehicle.engineNo = data.engineNo
+  if (data.chassisNo !== undefined) {
+    vehicle.chassisNo = data.chassisNo
+    if (!vehicle.vin) vehicle.vin = data.chassisNo
+  }
+  if (data.vin !== undefined) vehicle.vin = data.vin
+  if (data.imageUrl !== undefined) vehicle.imageUrl = data.imageUrl
+  if (data.imagePublicId !== undefined) vehicle.imagePublicId = data.imagePublicId
+  if (data.odometer !== undefined) vehicle.odometer = data.odometer
+  if (data.fuelType !== undefined) vehicle.fuelType = data.fuelType
+  vehicle.updatedBy = req.user?.id as unknown as typeof vehicle.updatedBy
+  await vehicle.save()
+
+  return {
+    id: vehicle._id.toString(),
+    registrationNo: vehicle.registrationNo,
+    engineNo: vehicle.engineNo,
+    chassisNo: vehicle.chassisNo,
+    vin: vehicle.vin,
+    imageUrl: vehicle.imageUrl,
+    imagePublicId: vehicle.imagePublicId,
+    odometer: vehicle.odometer,
+  }
 }

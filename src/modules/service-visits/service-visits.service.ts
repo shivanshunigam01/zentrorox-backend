@@ -1,4 +1,4 @@
-import { Booking, ServiceVisit, JobCard, Bay } from '../../models/index.js'
+import { Booking, ServiceVisit, JobCard, Bay, Vehicle } from '../../models/index.js'
 import { NotFoundError, ValidationError } from '../../utils/errors.js'
 import { generateDocumentNumber } from '../../utils/numbering.js'
 import { SERVICE_STAGES, STAGE_UI_PATHS } from '../../types/enums.js'
@@ -39,7 +39,10 @@ function formatServiceVisit(visit: {
     model: string
     variant?: string
     vin?: string
+    chassisNo?: string
     engineNo?: string
+    imageUrl?: string
+    imagePublicId?: string
     _id?: { toString(): string }
   }
 }) {
@@ -59,7 +62,11 @@ function formatServiceVisit(visit: {
     model: string
     variant?: string
     vin?: string
+    chassisNo?: string
     engineNo?: string
+    imageUrl?: string
+    imagePublicId?: string
+    _id?: { toString(): string }
   } | undefined
 
   return {
@@ -72,7 +79,11 @@ function formatServiceVisit(visit: {
     model: vehicle?.model,
     variant: vehicle?.variant,
     vin: vehicle?.vin,
+    chassisNo: vehicle?.chassisNo ?? vehicle?.vin,
     engineNo: vehicle?.engineNo,
+    vehicleImageUrl: vehicle?.imageUrl,
+    vehicleImagePublicId: vehicle?.imagePublicId,
+    vehicleId: vehicle?._id?.toString(),
     jobCardNumber: visit.jobCardNumber,
     advisor: visit.advisorId,
     status: visit.status,
@@ -258,6 +269,10 @@ export async function updateServiceVisit(
     promiseTime?: string
     remarks?: string
     outstanding?: number
+    engineNo?: string
+    chassisNo?: string
+    vehicleImageUrl?: string
+    vehicleImagePublicId?: string
   },
 ) {
   const visit = await ServiceVisit.findOne({ _id: id, tenantId: req.tenantId! })
@@ -270,6 +285,29 @@ export async function updateServiceVisit(
   if (body.outstanding !== undefined) visit.outstanding = body.outstanding
   visit.updatedBy = req.user?.id as unknown as typeof visit.updatedBy
   await visit.save()
+
+  const needsVehicleUpdate =
+    body.engineNo !== undefined ||
+    body.chassisNo !== undefined ||
+    body.vehicleImageUrl !== undefined ||
+    body.vehicleImagePublicId !== undefined ||
+    body.odometer !== undefined
+
+  if (needsVehicleUpdate && visit.vehicleId) {
+    const vehicle = await Vehicle.findOne({ _id: visit.vehicleId, tenantId: req.tenantId! })
+    if (vehicle) {
+      if (body.engineNo !== undefined) vehicle.engineNo = body.engineNo
+      if (body.chassisNo !== undefined) {
+        vehicle.chassisNo = body.chassisNo
+        if (!vehicle.vin) vehicle.vin = body.chassisNo
+      }
+      if (body.vehicleImageUrl !== undefined) vehicle.imageUrl = body.vehicleImageUrl
+      if (body.vehicleImagePublicId !== undefined) vehicle.imagePublicId = body.vehicleImagePublicId
+      if (body.odometer !== undefined) vehicle.odometer = body.odometer
+      vehicle.updatedBy = req.user?.id as unknown as typeof vehicle.updatedBy
+      await vehicle.save()
+    }
+  }
 
   return getServiceVisit(req, id)
 }

@@ -20,6 +20,10 @@ const createSchema = z.object({
   pickupAddress: z.string().optional(),
   source: z.string().optional(),
   remarks: z.string().optional(),
+  engineNo: z.string().optional(),
+  chassisNo: z.string().optional(),
+  vehicleImageUrl: z.string().optional(),
+  vehicleImagePublicId: z.string().optional(),
 })
 
 router.get('/', async (req, res, next) => {
@@ -68,6 +72,10 @@ const updateSchema = z.object({
   source: z.string().optional(),
   remarks: z.string().optional(),
   status: z.enum(['BOOKED', 'CONFIRMED', 'RESCHEDULED', 'CANCELLED', 'ARRIVED', 'NO_SHOW']).optional(),
+  engineNo: z.string().optional(),
+  chassisNo: z.string().optional(),
+  vehicleImageUrl: z.string().optional(),
+  vehicleImagePublicId: z.string().optional(),
 })
 
 router.patch('/:id/status', async (req, res, next) => {

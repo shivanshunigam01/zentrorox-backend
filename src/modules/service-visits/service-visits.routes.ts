@@ -58,6 +58,10 @@ router.patch('/:id', async (req, res, next) => {
       promiseTime: z.string().optional(),
       remarks: z.string().optional(),
       outstanding: z.number().optional(),
+      engineNo: z.string().optional(),
+      chassisNo: z.string().optional(),
+      vehicleImageUrl: z.string().optional(),
+      vehicleImagePublicId: z.string().optional(),
     }).parse(req.body)
     const data = await serviceVisitsService.updateServiceVisit(req, req.params.id, body)
     res.json({ success: true, data })

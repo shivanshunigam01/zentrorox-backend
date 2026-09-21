@@ -1,8 +1,41 @@
-import { Booking, ServiceVisit } from '../../models/index.js'
+import { Booking, ServiceVisit, Vehicle } from '../../models/index.js'
 import { NotFoundError } from '../../utils/errors.js'
 import { generateDocumentNumber } from '../../utils/numbering.js'
 import type { Request } from 'express'
 import type { BookingStatus } from '../../types/enums.js'
+
+async function syncVehicleDetails(
+  req: Request,
+  vehicleId: string,
+  data: {
+    engineNo?: string
+    chassisNo?: string
+    vehicleImageUrl?: string
+    vehicleImagePublicId?: string
+  },
+) {
+  if (
+    data.engineNo === undefined &&
+    data.chassisNo === undefined &&
+    data.vehicleImageUrl === undefined &&
+    data.vehicleImagePublicId === undefined
+  ) {
+    return
+  }
+
+  const vehicle = await Vehicle.findOne({ _id: vehicleId, tenantId: req.tenantId! })
+  if (!vehicle) return
+
+  if (data.engineNo !== undefined) vehicle.engineNo = data.engineNo
+  if (data.chassisNo !== undefined) {
+    vehicle.chassisNo = data.chassisNo
+    if (!vehicle.vin) vehicle.vin = data.chassisNo
+  }
+  if (data.vehicleImageUrl !== undefined) vehicle.imageUrl = data.vehicleImageUrl
+  if (data.vehicleImagePublicId !== undefined) vehicle.imagePublicId = data.vehicleImagePublicId
+  vehicle.updatedBy = req.user?.id as unknown as typeof vehicle.updatedBy
+  await vehicle.save()
+}
 
 interface ListParams {
   search?: string
@@ -94,9 +127,12 @@ export async function getBooking(req: Request, id: string) {
     model?: string
     variant?: string
     vin?: string
+    chassisNo?: string
     engineNo?: string
     fuelType?: string
     odometer?: number
+    imageUrl?: string
+    imagePublicId?: string
   } | null
   const branch = booking.branchId as {
     name?: string
@@ -142,9 +178,12 @@ export async function getBooking(req: Request, id: string) {
           model: vehicle.model,
           variant: vehicle.variant,
           vin: vehicle.vin,
+          chassisNo: vehicle.chassisNo ?? vehicle.vin,
           engineNo: vehicle.engineNo,
           fuelType: vehicle.fuelType,
           odometer: vehicle.odometer,
+          imageUrl: vehicle.imageUrl,
+          imagePublicId: vehicle.imagePublicId,
         }
       : null,
     branch: branch
@@ -176,9 +215,15 @@ export async function createBooking(req: Request, data: {
   pickupAddress?: string
   source?: string
   remarks?: string
+  engineNo?: string
+  chassisNo?: string
+  vehicleImageUrl?: string
+  vehicleImagePublicId?: string
 }) {
   const tenantId = req.tenantId!
   const bookingNumber = await generateDocumentNumber(tenantId, 'BOOKING')
+
+  await syncVehicleDetails(req, data.vehicleId, data)
 
   const booking = await Booking.create({
     tenantId,
@@ -201,7 +246,7 @@ export async function createBooking(req: Request, data: {
 
   const created = await Booking.findById(booking._id)
     .populate('customerId', 'name mobile')
-    .populate('vehicleId', 'registrationNo make model')
+    .populate('vehicleId', 'registrationNo make model engineNo chassisNo vin imageUrl')
     .lean()
 
   return {
@@ -212,7 +257,14 @@ export async function createBooking(req: Request, data: {
     preferredSlot: booking.preferredSlot,
     status: booking.status,
     customer: created?.customerId as { name: string; mobile?: string } | undefined,
-    vehicle: created?.vehicleId as { registrationNo: string; make: string; model: string } | undefined,
+    vehicle: created?.vehicleId as {
+      registrationNo: string
+      make: string
+      model: string
+      engineNo?: string
+      chassisNo?: string
+      imageUrl?: string
+    } | undefined,
   }
 }
 
@@ -238,6 +290,10 @@ export async function updateBooking(req: Request, id: string, data: {
   source?: string
   remarks?: string
   status?: BookingStatus
+  engineNo?: string
+  chassisNo?: string
+  vehicleImageUrl?: string
+  vehicleImagePublicId?: string
 }) {
   const existing = await Booking.findOne({ _id: id, tenantId: req.tenantId! })
   if (!existing) throw new NotFoundError('Booking not found')
@@ -258,5 +314,8 @@ export async function updateBooking(req: Request, id: string, data: {
 
   existing.updatedBy = req.user?.id as unknown as typeof existing.updatedBy
   await existing.save()
+
+  await syncVehicleDetails(req, existing.vehicleId.toString(), data)
+
   return getBooking(req, id)
 }
