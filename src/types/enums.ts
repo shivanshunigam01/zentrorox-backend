@@ -4,6 +4,15 @@ export type CustomerType = (typeof CUSTOMER_TYPES)[number]
 export const BOOKING_STATUSES = ['BOOKED', 'CONFIRMED', 'RESCHEDULED', 'CANCELLED', 'ARRIVED', 'NO_SHOW'] as const
 export type BookingStatus = (typeof BOOKING_STATUSES)[number]
 
+export const PICKUP_IMAGE_TYPES = [
+  'FRONT', 'REAR', 'LEFT', 'RIGHT', 'STEPNEY', 'INTERIOR', 'OTHER_GOODS',
+] as const
+export type PickupImageType = (typeof PICKUP_IMAGE_TYPES)[number]
+
+export const REQUIRED_PICKUP_IMAGE_TYPES: PickupImageType[] = [
+  'FRONT', 'REAR', 'LEFT', 'RIGHT', 'INTERIOR',
+]
+
 export const SERVICE_VISIT_STATUSES = ['OPEN', 'IN_PROGRESS', 'ON_HOLD', 'COMPLETED', 'CANCELLED'] as const
 export type ServiceVisitStatus = (typeof SERVICE_VISIT_STATUSES)[number]
 

@@ -70,6 +70,53 @@ router.patch('/:id', async (req, res, next) => {
   }
 })
 
+router.patch('/:id/pickup/assign', async (req, res, next) => {
+  try {
+    const { executiveId } = z.object({ executiveId: z.string().min(1) }).parse(req.body)
+    const data = await serviceVisitsService.assignPickupExecutive(req, req.params.id, executiveId)
+    res.json({ success: true, data })
+  } catch (err) {
+    next(err)
+  }
+})
+
+router.post('/:id/pickup/images', async (req, res, next) => {
+  try {
+    const body = z.object({
+      type: z.enum(['FRONT', 'REAR', 'LEFT', 'RIGHT', 'STEPNEY', 'INTERIOR', 'OTHER_GOODS']),
+      url: z.string().url(),
+      publicId: z.string().optional(),
+      caption: z.string().optional(),
+      latitude: z.number().optional(),
+      longitude: z.number().optional(),
+      capturedAt: z.string(),
+    }).parse(req.body)
+    const data = await serviceVisitsService.addPickupImage(req, req.params.id, body)
+    res.status(201).json({ success: true, data })
+  } catch (err) {
+    next(err)
+  }
+})
+
+router.delete('/:id/pickup/images/:index', async (req, res, next) => {
+  try {
+    const index = Number(req.params.index)
+    const data = await serviceVisitsService.removePickupImage(req, req.params.id, index)
+    res.json({ success: true, data })
+  } catch (err) {
+    next(err)
+  }
+})
+
+router.post('/:id/pickup/complete', async (req, res, next) => {
+  try {
+    const data = await serviceVisitsService.completePickup(req, req.params.id)
+    res.json({ success: true, data })
+  } catch (err) {
+    next(err)
+  }
+})
+
 router.patch('/:id/advance-stage', async (req, res, next) => {
   try {
     const { stage } = z.object({

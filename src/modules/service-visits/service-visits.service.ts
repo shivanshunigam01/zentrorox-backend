@@ -1,7 +1,8 @@
 import { Booking, ServiceVisit, JobCard, Bay, Vehicle } from '../../models/index.js'
 import { NotFoundError, ValidationError } from '../../utils/errors.js'
 import { generateDocumentNumber } from '../../utils/numbering.js'
-import { SERVICE_STAGES, STAGE_UI_PATHS } from '../../types/enums.js'
+import { SERVICE_STAGES, STAGE_UI_PATHS, REQUIRED_PICKUP_IMAGE_TYPES, PICKUP_IMAGE_TYPES } from '../../types/enums.js'
+import type { PickupImageType } from '../../types/enums.js'
 import type { Request } from 'express'
 import type { ServiceStage } from '../../types/enums.js'
 
@@ -31,6 +32,23 @@ function formatServiceVisit(visit: {
   outstanding?: number
   odometer?: number
   fuelLevel?: string
+  pickupRequired?: boolean
+  pickupAddress?: string
+  pickupLocationLat?: number
+  pickupLocationLng?: number
+  pickupExecutiveId?: { firstName?: string; lastName?: string; _id?: { toString(): string } } | string
+  pickupAssignedAt?: Date
+  pickupCompletedAt?: Date
+  pickupImages?: Array<{
+    type: string
+    url: string
+    publicId?: string
+    caption?: string
+    latitude?: number
+    longitude?: number
+    capturedAt: Date
+    uploadedAt?: Date
+  }>
   stageLogs?: { stage: ServiceStage; status: string }[]
   customerId?: { name: string; mobile: string; _id?: { toString(): string } }
   vehicleId?: {
@@ -92,6 +110,28 @@ function formatServiceVisit(visit: {
     outstanding: visit.outstanding ?? 0,
     odometer: visit.odometer,
     fuel: visit.fuelLevel,
+    pickupRequired: visit.pickupRequired ?? false,
+    pickupAddress: visit.pickupAddress,
+    pickupLocationLat: visit.pickupLocationLat,
+    pickupLocationLng: visit.pickupLocationLng,
+    pickupExecutiveId: typeof visit.pickupExecutiveId === 'object' && visit.pickupExecutiveId
+      ? visit.pickupExecutiveId._id?.toString()
+      : typeof visit.pickupExecutiveId === 'string' ? visit.pickupExecutiveId : undefined,
+    pickupExecutiveName: typeof visit.pickupExecutiveId === 'object' && visit.pickupExecutiveId
+      ? `${visit.pickupExecutiveId.firstName ?? ''} ${visit.pickupExecutiveId.lastName ?? ''}`.trim()
+      : undefined,
+    pickupAssignedAt: visit.pickupAssignedAt,
+    pickupCompletedAt: visit.pickupCompletedAt,
+    pickupImages: (visit.pickupImages ?? []).map((img) => ({
+      type: img.type,
+      url: img.url,
+      publicId: img.publicId,
+      caption: img.caption,
+      latitude: img.latitude,
+      longitude: img.longitude,
+      capturedAt: img.capturedAt,
+      uploadedAt: img.uploadedAt,
+    })),
     stages,
   }
 }
@@ -106,7 +146,14 @@ export async function listServiceVisits(req: Request, params: ListParams) {
   const filter: Record<string, unknown> = {
     tenantId,
     ...(branchId && { branchId }),
-    ...(params.stage && { currentStage: params.stage }),
+    ...(params.stage && {
+      stageLogs: {
+        $elemMatch: {
+          stage: params.stage,
+          status: { $in: ['CURRENT', 'COMPLETED'] },
+        },
+      },
+    }),
     ...(params.status && { status: params.status }),
     ...(params.outstandingOnly && { outstanding: { $gt: 0 } }),
   }
@@ -128,7 +175,17 @@ export async function listServiceVisits(req: Request, params: ListParams) {
   ])
 
   return {
-    items: items.map((sv) => formatServiceVisit(sv as unknown as Parameters<typeof formatServiceVisit>[0])),
+    items: items.map((sv) => {
+      const formatted = formatServiceVisit(sv as unknown as Parameters<typeof formatServiceVisit>[0])
+      if (!params.stage) return formatted
+
+      const stageLog = (sv.stageLogs ?? []).find((log) => log.stage === params.stage)
+      return {
+        ...formatted,
+        queueStageStatus: stageLog?.status ?? 'NOT_STARTED',
+        queueStageCompletedAt: stageLog?.completedAt,
+      }
+    }),
     pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
   }
 }
@@ -138,6 +195,7 @@ export async function getServiceVisit(req: Request, id: string) {
     .populate('customerId')
     .populate('vehicleId')
     .populate('branchId')
+    .populate('pickupExecutiveId', 'firstName lastName email')
     .lean()
 
   if (!visit) throw new NotFoundError('Service visit not found')
@@ -151,12 +209,19 @@ export async function createFromBooking(req: Request, bookingId: string) {
   if (booking.serviceVisitId) throw new ValidationError('Service visit already exists for this booking')
 
   const visitNumber = await generateDocumentNumber(tenantId, 'SERVICE_VISIT')
+  const isPickup = Boolean(booking.pickupRequired)
+  const startStage: ServiceStage = isPickup ? 'PICKUP' : 'ARRIVAL'
+  const now = new Date()
 
   const stageLogs = ALL_SERVICE_STAGES.map((stage) => ({
     stage,
-    status: stage === 'BOOKING' ? 'COMPLETED' : stage === 'ARRIVAL' ? 'CURRENT' : 'NOT_STARTED',
-    ...(stage === 'BOOKING' && { completedAt: new Date() }),
-    ...(stage === 'ARRIVAL' && { startedAt: new Date() }),
+    status: stage === 'BOOKING'
+      ? 'COMPLETED'
+      : stage === startStage
+        ? 'CURRENT'
+        : 'NOT_STARTED',
+    ...(stage === 'BOOKING' && { completedAt: now }),
+    ...(stage === startStage && { startedAt: now }),
   }))
 
   const visit = await ServiceVisit.create({
@@ -166,16 +231,21 @@ export async function createFromBooking(req: Request, bookingId: string) {
     customerId: booking.customerId,
     vehicleId: booking.vehicleId,
     bookingId: booking._id,
-    currentStage: 'ARRIVAL',
+    currentStage: startStage,
     status: 'OPEN',
     advisorId: booking.advisorId,
+    pickupRequired: isPickup,
+    pickupAddress: booking.pickupAddress,
+    pickupLocationLat: booking.pickupLocationLat,
+    pickupLocationLng: booking.pickupLocationLng,
+    pickupImages: [],
     stageLogs,
     createdBy: req.user?.id,
   })
 
   await Booking.updateOne(
     { _id: booking._id },
-    { serviceVisitId: visit._id, status: 'ARRIVED' },
+    { serviceVisitId: visit._id, status: 'CONFIRMED' },
   )
 
   return getServiceVisit(req, visit._id.toString())
@@ -309,6 +379,10 @@ export async function updateServiceVisit(
     }
   }
 
+  if (!visit.pickupRequired && visit.currentStage === 'ARRIVAL' && visit.bookingId) {
+    await Booking.updateOne({ _id: visit.bookingId }, { status: 'ARRIVED' })
+  }
+
   return getServiceVisit(req, id)
 }
 
@@ -330,4 +404,101 @@ export async function addInspectionImage(
   await visit.save()
 
   return visit.inspectionImages
+}
+
+export async function assignPickupExecutive(req: Request, id: string, executiveId: string) {
+  const visit = await ServiceVisit.findOne({ _id: id, tenantId: req.tenantId! })
+  if (!visit) throw new NotFoundError('Service visit not found')
+  if (!visit.pickupRequired) throw new ValidationError('This visit is not a pickup booking')
+
+  visit.pickupExecutiveId = executiveId as unknown as typeof visit.pickupExecutiveId
+  visit.pickupAssignedAt = new Date()
+  visit.updatedBy = req.user?.id as unknown as typeof visit.updatedBy
+  await visit.save()
+
+  return getServiceVisit(req, id)
+}
+
+export async function addPickupImage(
+  req: Request,
+  id: string,
+  image: {
+    type: PickupImageType
+    url: string
+    publicId?: string
+    caption?: string
+    latitude?: number
+    longitude?: number
+    capturedAt: string
+  },
+) {
+  if (!PICKUP_IMAGE_TYPES.includes(image.type)) {
+    throw new ValidationError('Invalid pickup image type')
+  }
+
+  const visit = await ServiceVisit.findOne({ _id: id, tenantId: req.tenantId! })
+  if (!visit) throw new NotFoundError('Service visit not found')
+  if (!visit.pickupRequired) throw new ValidationError('This visit is not a pickup booking')
+
+  visit.pickupImages = visit.pickupImages ?? []
+
+  if (image.type !== 'OTHER_GOODS') {
+    const existingIndex = visit.pickupImages.findIndex((img) => img.type === image.type)
+    if (existingIndex !== -1) visit.pickupImages.splice(existingIndex, 1)
+  }
+
+  visit.pickupImages.push({
+    type: image.type,
+    url: image.url,
+    publicId: image.publicId,
+    caption: image.caption,
+    latitude: image.latitude,
+    longitude: image.longitude,
+    capturedAt: new Date(image.capturedAt),
+    uploadedAt: new Date(),
+  })
+
+  visit.updatedBy = req.user?.id as unknown as typeof visit.updatedBy
+  await visit.save()
+
+  return getServiceVisit(req, id)
+}
+
+export async function removePickupImage(req: Request, id: string, index: number) {
+  const visit = await ServiceVisit.findOne({ _id: id, tenantId: req.tenantId! })
+  if (!visit) throw new NotFoundError('Service visit not found')
+
+  visit.pickupImages = visit.pickupImages ?? []
+  if (index < 0 || index >= visit.pickupImages.length) {
+    throw new ValidationError('Invalid image index')
+  }
+
+  visit.pickupImages.splice(index, 1)
+  visit.updatedBy = req.user?.id as unknown as typeof visit.updatedBy
+  await visit.save()
+
+  return getServiceVisit(req, id)
+}
+
+export async function completePickup(req: Request, id: string) {
+  const visit = await ServiceVisit.findOne({ _id: id, tenantId: req.tenantId! })
+  if (!visit) throw new NotFoundError('Service visit not found')
+  if (!visit.pickupRequired) throw new ValidationError('This visit is not a pickup booking')
+  if (!visit.pickupExecutiveId) throw new ValidationError('Assign a pickup executive first')
+
+  const uploadedTypes = new Set((visit.pickupImages ?? []).map((img) => img.type))
+  const missing = REQUIRED_PICKUP_IMAGE_TYPES.filter((t) => !uploadedTypes.has(t))
+  if (missing.length) {
+    throw new ValidationError(`Missing required pickup photos: ${missing.join(', ')}`)
+  }
+
+  visit.pickupCompletedAt = new Date()
+  visit.updatedBy = req.user?.id as unknown as typeof visit.updatedBy
+  await visit.save()
+
+  if (visit.bookingId) {
+    await Booking.updateOne({ _id: visit.bookingId }, { status: 'ARRIVED' })
+  }
+
+  return advanceStage(req, id, 'ARRIVAL')
 }

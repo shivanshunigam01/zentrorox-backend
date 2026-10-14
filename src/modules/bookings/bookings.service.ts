@@ -155,6 +155,8 @@ export async function getBooking(req: Request, id: string) {
     preferredDate: booking.preferredDate,
     pickupRequired: booking.pickupRequired,
     pickupAddress: booking.pickupAddress,
+    pickupLocationLat: booking.pickupLocationLat,
+    pickupLocationLng: booking.pickupLocationLng,
     source: booking.source,
     remarks: booking.remarks,
     customer: customer
@@ -213,6 +215,8 @@ export async function createBooking(req: Request, data: {
   preferredSlot?: string
   pickupRequired?: boolean
   pickupAddress?: string
+  pickupLocationLat?: number
+  pickupLocationLng?: number
   source?: string
   remarks?: string
   engineNo?: string
@@ -237,7 +241,9 @@ export async function createBooking(req: Request, data: {
     preferredDate: data.preferredDate ? new Date(data.preferredDate) : undefined,
     preferredSlot: data.preferredSlot,
     pickupRequired: data.pickupRequired ?? false,
-    pickupAddress: data.pickupAddress,
+    pickupAddress: data.pickupRequired ? data.pickupAddress : undefined,
+    pickupLocationLat: data.pickupRequired ? data.pickupLocationLat : undefined,
+    pickupLocationLng: data.pickupRequired ? data.pickupLocationLng : undefined,
     source: data.source,
     remarks: data.remarks,
     advisorId: req.user?.id,
@@ -287,6 +293,8 @@ export async function updateBooking(req: Request, id: string, data: {
   preferredSlot?: string
   pickupRequired?: boolean
   pickupAddress?: string
+  pickupLocationLat?: number
+  pickupLocationLng?: number
   source?: string
   remarks?: string
   status?: BookingStatus
@@ -306,8 +314,17 @@ export async function updateBooking(req: Request, id: string, data: {
     existing.preferredDate = data.preferredDate ? new Date(data.preferredDate) : undefined
   }
   if (data.preferredSlot !== undefined) existing.preferredSlot = data.preferredSlot
-  if (data.pickupRequired !== undefined) existing.pickupRequired = data.pickupRequired
+  if (data.pickupRequired !== undefined) {
+    existing.pickupRequired = data.pickupRequired
+    if (!data.pickupRequired) {
+      existing.pickupAddress = undefined
+      existing.pickupLocationLat = undefined
+      existing.pickupLocationLng = undefined
+    }
+  }
   if (data.pickupAddress !== undefined) existing.pickupAddress = data.pickupAddress
+  if (data.pickupLocationLat !== undefined) existing.pickupLocationLat = data.pickupLocationLat
+  if (data.pickupLocationLng !== undefined) existing.pickupLocationLng = data.pickupLocationLng
   if (data.source !== undefined) existing.source = data.source
   if (data.remarks !== undefined) existing.remarks = data.remarks
   if (data.status) existing.status = data.status
