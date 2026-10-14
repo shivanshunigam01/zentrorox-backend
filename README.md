@@ -142,10 +142,22 @@ src/
 | `npm run start` | Run production build |
 | `npm run db:seed` | Seed demo data into MongoDB |
 
-## Frontend Integration
+## Frontend Integration (local only — do not commit secrets)
 
-Set in Frontend `.env`:
+On your machine, in the **Frontend** repo:
 
+```bash
+cp .env.local.example .env.local
 ```
-VITE_API_BASE_URL=http://localhost:3000/api/v1
+
+`.env.local` (gitignored):
+
+```env
+VITE_USE_LOCAL_API=false
+VITE_API_BASE_URL=/api/v1
 ```
+
+Restart `npm run dev`. Vite proxies `/api/v1` to this API on port 3000.
+
+Full steps: [docs/LOCAL_FULL_STACK.md](./docs/LOCAL_FULL_STACK.md)  
+Module map: [docs/SAAS_MODULES.md](./docs/SAAS_MODULES.md)
