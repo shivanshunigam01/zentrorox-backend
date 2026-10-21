@@ -20,6 +20,8 @@ router.post('/image', upload.single('file'), async (req, res, next) => {
       folder: z.string().optional(),
       entityType: z.string().optional(),
       entityId: z.string().optional(),
+      imageCategory: z.string().optional(),
+      remarks: z.string().optional(),
       tags: z.string().optional(),
     }).parse(req.body)
 
@@ -27,6 +29,8 @@ router.post('/image', upload.single('file'), async (req, res, next) => {
       folder: body.folder,
       entityType: body.entityType,
       entityId: body.entityId,
+      imageCategory: body.imageCategory,
+      remarks: body.remarks,
       tags: body.tags ? body.tags.split(',').map((t) => t.trim()) : undefined,
     })
 

@@ -7,6 +7,15 @@ const router = Router()
 
 router.use(authenticate, requireTenant, enforceTenantScope)
 
+router.get('/warehouses', async (req, res, next) => {
+  try {
+    const data = await partsService.listWarehouses(req)
+    res.json({ success: true, data })
+  } catch (err) {
+    next(err)
+  }
+})
+
 router.get('/dashboard', async (req, res, next) => {
   try {
     const data = await partsService.getPartsDashboard(req)

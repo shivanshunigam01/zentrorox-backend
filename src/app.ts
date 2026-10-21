@@ -20,6 +20,20 @@ import branchesRoutes from './modules/branches/branches.routes.js'
 import usersRoutes from './modules/users/users.routes.js'
 import searchRoutes from './modules/search/search.routes.js'
 import tenantRoutes from './modules/tenant/tenant.routes.js'
+import pickupsRoutes from './modules/pickups/pickups.routes.js'
+import receivingRoutes from './modules/receiving/receiving.routes.js'
+import vocRoutes from './modules/voc/voc.routes.js'
+import inspectionsRoutes from './modules/inspections/inspections.routes.js'
+import estimatesRoutes from './modules/estimates/estimates.routes.js'
+import approvalsRoutes from './modules/approvals/approvals.routes.js'
+import paymentsRoutes from './modules/payments/payments.routes.js'
+import wipRoutes from './modules/wip/wip.routes.js'
+import partsRequisitionsRoutes from './modules/parts-requisitions/parts-requisitions.routes.js'
+import inventoryRoutes from './modules/inventory/inventory.routes.js'
+import additionalWorkRoutes from './modules/additional-work/additional-work.routes.js'
+import qcRoutes from './modules/qc/qc.routes.js'
+import billingRoutes from './modules/billing/billing.routes.js'
+import { razorpayWebhookHandler } from './modules/payments/razorpay-webhook.handler.js'
 
 const corsMiddleware = cors({
   origin(_origin, callback) {
@@ -50,6 +64,12 @@ export function createApp() {
       crossOriginResourcePolicy: { policy: 'cross-origin' },
     }),
   )
+  app.post(
+    '/api/v1/payments/razorpay/webhook',
+    express.raw({ type: 'application/json' }),
+    razorpayWebhookHandler,
+  )
+
   app.use(express.json({ limit: '10mb' }))
   app.use(express.urlencoded({ extended: true }))
 
@@ -85,6 +105,19 @@ export function createApp() {
   api.use('/users', usersRoutes)
   api.use('/search', searchRoutes)
   api.use('/tenant', tenantRoutes)
+  api.use('/pickups', pickupsRoutes)
+  api.use('/receiving', receivingRoutes)
+  api.use('/voc', vocRoutes)
+  api.use('/inspections', inspectionsRoutes)
+  api.use('/estimates', estimatesRoutes)
+  api.use('/approvals', approvalsRoutes)
+  api.use('/payments', paymentsRoutes)
+  api.use('/wip', wipRoutes)
+  api.use('/parts-requisitions', partsRequisitionsRoutes)
+  api.use('/inventory', inventoryRoutes)
+  api.use('/additional-work', additionalWorkRoutes)
+  api.use('/qc', qcRoutes)
+  api.use('/billing', billingRoutes)
 
   app.use('/api/v1', api)
   app.use(notFoundHandler)

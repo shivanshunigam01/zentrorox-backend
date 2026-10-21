@@ -1,8 +1,10 @@
-import { Booking, ServiceVisit, Vehicle } from '../../models/index.js'
-import { NotFoundError } from '../../utils/errors.js'
+import { Booking, PickupTask, ServiceVisit, Vehicle } from '../../models/index.js'
+import { ConflictError, NotFoundError, ValidationError } from '../../utils/errors.js'
 import { generateDocumentNumber } from '../../utils/numbering.js'
 import type { Request } from 'express'
-import type { BookingStatus } from '../../types/enums.js'
+import type { ArrivalMethod, BookingStatus, BookingType } from '../../types/enums.js'
+import { normalizeBookingStatus } from '../../types/enums.js'
+import { assertBookingStatusTransition } from './booking-transitions.js'
 
 async function syncVehicleDetails(
   req: Request,
@@ -26,8 +28,8 @@ async function syncVehicleDetails(
   const vehicle = await Vehicle.findOne({ _id: vehicleId, tenantId: req.tenantId! })
   if (!vehicle) return
 
-  if (data.engineNo !== undefined) vehicle.engineNo = data.engineNo
-  if (data.chassisNo !== undefined) {
+  if (data.engineNo !== undefined && !vehicle.engineNo) vehicle.engineNo = data.engineNo
+  if (data.chassisNo !== undefined && !vehicle.chassisNo) {
     vehicle.chassisNo = data.chassisNo
     if (!vehicle.vin) vehicle.vin = data.chassisNo
   }
@@ -148,7 +150,13 @@ export async function getBooking(req: Request, id: string) {
     id: booking._id.toString(),
     bookingNumber: booking.bookingNumber,
     bookingDate: booking.bookingDate,
-    status: booking.status,
+    status: normalizeBookingStatus(booking.status),
+    bookingType: booking.bookingType,
+    arrivalMethod: booking.arrivalMethod,
+    bookingCharge: booking.bookingCharge,
+    customerPriority: booking.customerPriority,
+    breakdownDetails: booking.breakdownDetails,
+    completedGateInAt: booking.completedGateInAt,
     serviceType: booking.serviceType,
     customerComplaint: booking.customerComplaint,
     preferredSlot: booking.preferredSlot,
@@ -205,12 +213,26 @@ export async function getBooking(req: Request, id: string) {
   }
 }
 
+async function assertNoOpenVisitForVehicle(tenantId: string, vehicleId: string) {
+  const open = await ServiceVisit.findOne({
+    tenantId,
+    vehicleId,
+    status: { $in: ['OPEN', 'IN_PROGRESS', 'ON_HOLD'] },
+  }).lean()
+  if (open) {
+    throw new ConflictError('An active service visit already exists for this vehicle')
+  }
+}
+
 export async function createBooking(req: Request, data: {
   branchId: string
   customerId: string
   vehicleId: string
+  bookingType?: BookingType
+  arrivalMethod?: ArrivalMethod
   serviceType?: string
   customerComplaint?: string
+  customerPriority?: string
   preferredDate?: string
   preferredSlot?: string
   pickupRequired?: boolean
@@ -219,12 +241,23 @@ export async function createBooking(req: Request, data: {
   pickupLocationLng?: number
   source?: string
   remarks?: string
+  breakdownDetails?: Record<string, unknown>
   engineNo?: string
   chassisNo?: string
   vehicleImageUrl?: string
   vehicleImagePublicId?: string
 }) {
   const tenantId = req.tenantId!
+  await assertNoOpenVisitForVehicle(tenantId, data.vehicleId)
+
+  const bookingType = data.bookingType ?? 'NORMAL'
+  const pickupRequired = data.pickupRequired ?? (bookingType === 'BREAKDOWN_ON_SPOT'
+    || data.arrivalMethod === 'PICKUP')
+  const arrivalMethod: ArrivalMethod = pickupRequired ? 'PICKUP' : (data.arrivalMethod ?? 'SELF')
+  const bookingCharge = bookingType === 'BREAKDOWN_ON_SPOT' ? 0 : 0
+
+  const initialStatus: BookingStatus = pickupRequired ? 'AWAITING_PICKUP' : 'AWAITING_GATE_IN'
+
   const bookingNumber = await generateDocumentNumber(tenantId, 'BOOKING')
 
   await syncVehicleDetails(req, data.vehicleId, data)
@@ -234,21 +267,49 @@ export async function createBooking(req: Request, data: {
     branchId: data.branchId,
     bookingNumber,
     bookingDate: new Date(),
+    bookingType,
+    arrivalMethod,
+    bookingCharge,
+    status: 'CONFIRMED',
     customerId: data.customerId,
     vehicleId: data.vehicleId,
     serviceType: data.serviceType,
     customerComplaint: data.customerComplaint,
+    customerPriority: data.customerPriority,
     preferredDate: data.preferredDate ? new Date(data.preferredDate) : undefined,
     preferredSlot: data.preferredSlot,
-    pickupRequired: data.pickupRequired ?? false,
-    pickupAddress: data.pickupRequired ? data.pickupAddress : undefined,
-    pickupLocationLat: data.pickupRequired ? data.pickupLocationLat : undefined,
-    pickupLocationLng: data.pickupRequired ? data.pickupLocationLng : undefined,
+    pickupRequired,
+    pickupAddress: pickupRequired ? data.pickupAddress : undefined,
+    pickupLocationLat: pickupRequired ? data.pickupLocationLat : undefined,
+    pickupLocationLng: pickupRequired ? data.pickupLocationLng : undefined,
+    breakdownDetails: bookingType === 'BREAKDOWN_ON_SPOT' ? data.breakdownDetails : undefined,
     source: data.source,
     remarks: data.remarks,
     advisorId: req.user?.id,
     createdBy: req.user?.id,
   })
+
+  assertBookingStatusTransition('CONFIRMED', initialStatus)
+  booking.status = initialStatus
+  await booking.save()
+
+  if (pickupRequired) {
+    const existingPickup = await PickupTask.findOne({ tenantId, bookingId: booking._id })
+    if (!existingPickup) {
+      await PickupTask.create({
+        tenantId,
+        branchId: data.branchId,
+        bookingId: booking._id,
+        status: 'UNASSIGNED',
+        pickupAddress: data.pickupAddress,
+        pickupLocationLat: data.pickupLocationLat,
+        pickupLocationLng: data.pickupLocationLng,
+        recoveryPartner: bookingType === 'BREAKDOWN_ON_SPOT'
+          ? (data.breakdownDetails as { recoveryPartner?: string })?.recoveryPartner
+          : undefined,
+      })
+    }
+  }
 
   const created = await Booking.findById(booking._id)
     .populate('customerId', 'name mobile')
@@ -278,7 +339,12 @@ export async function updateBookingStatus(req: Request, id: string, status: Book
   const existing = await Booking.findOne({ _id: id, tenantId: req.tenantId! })
   if (!existing) throw new NotFoundError('Booking not found')
 
-  existing.status = status
+  const from = normalizeBookingStatus(existing.status)
+  const to = normalizeBookingStatus(status)
+  assertBookingStatusTransition(from, to)
+
+  existing.status = to
+  if (to === 'CHECKED_IN') existing.completedGateInAt = new Date()
   existing.updatedBy = req.user?.id as unknown as typeof existing.updatedBy
   await existing.save()
   return getBooking(req, id)

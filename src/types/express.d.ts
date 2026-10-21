@@ -26,6 +26,8 @@ export interface JwtPayload {
   sub: string
   tenantId: string | null
   type: 'access' | 'refresh'
+  /** Unique per refresh token — avoids duplicate DB hash when logins occur in the same second */
+  jti?: string
 }
 
 export const ALL_SERVICE_STAGES: ServiceStage[] = [

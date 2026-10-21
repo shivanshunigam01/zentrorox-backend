@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { z } from 'zod'
-import { authenticate, requireTenant } from '../../middleware/auth.js'
+import { authenticate, requirePermission, requireTenant } from '../../middleware/auth.js'
+import * as customerCreditService from './customer-credit.service.js'
 import { enforceTenantScope } from '../../middleware/tenant-isolation.js'
 import * as customersService from './customers.service.js'
 
@@ -32,6 +33,36 @@ router.get('/', async (req, res, next) => {
       limit: req.query.limit ? Number(req.query.limit) : 20,
     }
     const data = await customersService.listCustomers(req, params)
+    res.json({ success: true, data })
+  } catch (err) {
+    next(err)
+  }
+})
+
+router.get('/:id/credit', requirePermission('customers.credit.view'), async (req, res, next) => {
+  try {
+    const data = await customerCreditService.getCustomerCredit(req, String(req.params.id))
+    res.json({ success: true, data })
+  } catch (err) {
+    next(err)
+  }
+})
+
+router.put('/:id/credit', requirePermission('customers.credit.edit'), async (req, res, next) => {
+  try {
+    const body = z.object({
+      creditAllowed: z.boolean().optional(),
+      creditLimit: z.number().optional(),
+      creditPeriodDays: z.number().optional(),
+      effectiveFrom: z.string().optional(),
+      effectiveTo: z.string().optional(),
+      status: z.string().optional(),
+      remarks: z.string().optional(),
+      creditHold: z.boolean().optional(),
+      creditHoldReason: z.string().optional(),
+      policyReference: z.string().optional(),
+    }).parse(req.body)
+    const data = await customerCreditService.upsertCustomerCredit(req, String(req.params.id), body)
     res.json({ success: true, data })
   } catch (err) {
     next(err)

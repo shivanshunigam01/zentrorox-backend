@@ -1,4 +1,4 @@
-import { Booking, ServiceVisit, JobCard, Bay, Vehicle } from '../../models/index.js'
+import { Booking, PickupTask, ServiceVisit, JobCard, Bay, Vehicle } from '../../models/index.js'
 import { NotFoundError, ValidationError } from '../../utils/errors.js'
 import { generateDocumentNumber } from '../../utils/numbering.js'
 import { SERVICE_STAGES, STAGE_UI_PATHS, REQUIRED_PICKUP_IMAGE_TYPES, PICKUP_IMAGE_TYPES } from '../../types/enums.js'
@@ -208,6 +208,13 @@ export async function createFromBooking(req: Request, bookingId: string) {
   if (!booking) throw new NotFoundError('Booking not found')
   if (booking.serviceVisitId) throw new ValidationError('Service visit already exists for this booking')
 
+  const openForVehicle = await ServiceVisit.findOne({
+    tenantId,
+    vehicleId: booking.vehicleId,
+    status: { $in: ['OPEN', 'IN_PROGRESS', 'ON_HOLD'] },
+  }).lean()
+  if (openForVehicle) throw new ValidationError('An active service visit already exists for this vehicle')
+
   const visitNumber = await generateDocumentNumber(tenantId, 'SERVICE_VISIT')
   const isPickup = Boolean(booking.pickupRequired)
   const startStage: ServiceStage = isPickup ? 'PICKUP' : 'ARRIVAL'
@@ -245,7 +252,12 @@ export async function createFromBooking(req: Request, bookingId: string) {
 
   await Booking.updateOne(
     { _id: booking._id },
-    { serviceVisitId: visit._id, status: 'CONFIRMED' },
+    { serviceVisitId: visit._id },
+  )
+
+  await PickupTask.updateOne(
+    { tenantId, bookingId: booking._id },
+    { visitId: visit._id },
   )
 
   return getServiceVisit(req, visit._id.toString())

@@ -1,8 +1,9 @@
 import { Router } from 'express'
 import { z } from 'zod'
-import { authenticate, requireTenant } from '../../middleware/auth.js'
+import { authenticate, requirePermission, requireTenant } from '../../middleware/auth.js'
 import { enforceTenantScope } from '../../middleware/tenant-isolation.js'
 import * as serviceVisitsService from './service-visits.service.js'
+import { getPhaseEligibility } from './phase-eligibility.service.js'
 
 const router = Router()
 
@@ -32,9 +33,18 @@ router.get('/wip', async (req, res, next) => {
   }
 })
 
-router.get('/:id', async (req, res, next) => {
+router.get('/:id/phase-eligibility', requirePermission('service_visits.view'), async (req, res, next) => {
   try {
-    const data = await serviceVisitsService.getServiceVisit(req, req.params.id)
+    const data = await getPhaseEligibility(req, String(req.params.id))
+    res.json({ success: true, data })
+  } catch (err) {
+    next(err)
+  }
+})
+
+router.get('/:id', requirePermission('service_visits.view'), async (req, res, next) => {
+  try {
+    const data = await serviceVisitsService.getServiceVisit(req, String(req.params.id))
     res.json({ success: true, data })
   } catch (err) {
     next(err)

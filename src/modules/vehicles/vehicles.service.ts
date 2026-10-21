@@ -108,7 +108,13 @@ export async function createVehicle(req: Request, data: {
     createdBy: req.user?.id,
   })
 
-  return Vehicle.findById(vehicle._id).populate('customerId', 'name').lean()
+  const doc = await Vehicle.findById(vehicle._id).populate('customerId', 'name mobile').lean()
+  if (!doc) throw new NotFoundError('Vehicle not found')
+  return {
+    ...doc,
+    id: doc._id.toString(),
+    customer: doc.customerId,
+  }
 }
 
 export async function updateVehicle(req: Request, id: string, data: {

@@ -3,7 +3,8 @@ import { connectDatabase, disconnectDatabase } from '../lib/mongoose.js'
 import {
   Tenant, Branch, Permission, Role, User,
   Customer, Vehicle, Bay, Warehouse, Part, StockBalance,
-  Booking, ServiceVisit, JobCard, NumberingSeries, MasterData,
+  Booking, ServiceVisit, JobCard, NumberingSeries, MasterData, TaxRule, DiscountPolicy, PaymentPolicy,
+  WorkshopTeam, WorkshopLocation,
 } from '../models/index.js'
 import { SERVICE_STAGES } from '../types/enums.js'
 
@@ -31,6 +32,58 @@ const PERMISSIONS = [
   { module: 'admin', action: 'edit', code: 'admin.edit' },
   { module: 'masters', action: 'view', code: 'masters.view' },
   { module: 'masters', action: 'edit', code: 'masters.edit' },
+  { module: 'inspections', action: 'view', code: 'inspections.view' },
+  { module: 'inspections', action: 'edit', code: 'inspections.edit' },
+  { module: 'inspections', action: 'review', code: 'inspections.review' },
+  { module: 'approvals', action: 'view', code: 'approvals.view' },
+  { module: 'approvals', action: 'record', code: 'approvals.record' },
+  { module: 'approvals', action: 'job_card_authorize', code: 'approvals.job_card_authorize' },
+  { module: 'payments', action: 'view', code: 'payments.view' },
+  { module: 'payments', action: 'record', code: 'payments.record' },
+  { module: 'payments', action: 'verify', code: 'payments.verify' },
+  { module: 'payments', action: 'reverse', code: 'payments.reverse' },
+  { module: 'payments', action: 'share', code: 'payments.share' },
+  { module: 'customers', action: 'credit_view', code: 'customers.credit.view' },
+  { module: 'customers', action: 'credit_edit', code: 'customers.credit.edit' },
+  { module: 'customers', action: 'credit_approve', code: 'customers.credit.approve' },
+  { module: 'financial_auth', action: 'exception', code: 'financial_auth.exception' },
+  { module: 'job_cards', action: 'view', code: 'job_cards.view' },
+  { module: 'job_cards', action: 'create', code: 'job_cards.create' },
+  { module: 'job_cards', action: 'assign', code: 'job_cards.assign' },
+  { module: 'job_cards', action: 'reassign', code: 'job_cards.reassign' },
+  { module: 'job_cards', action: 'release', code: 'job_cards.release' },
+  { module: 'job_cards', action: 'print', code: 'job_cards.print' },
+  { module: 'workshop_teams', action: 'manage', code: 'workshop_teams.manage' },
+  { module: 'workshop_locations', action: 'manage', code: 'workshop_locations.manage' },
+  { module: 'delivery', action: 'create', code: 'delivery_commitments.create' },
+  { module: 'delivery', action: 'revise', code: 'delivery_commitments.revise' },
+  { module: 'wip', action: 'view', code: 'wip.view' },
+  { module: 'wip', action: 'start', code: 'wip.start' },
+  { module: 'wip', action: 'update', code: 'wip.update' },
+  { module: 'wip', action: 'complete', code: 'wip.complete' },
+  { module: 'wip', action: 'verify', code: 'wip.verify' },
+  { module: 'wip', action: 'raise_additional_work', code: 'wip.raise_additional_work' },
+  { module: 'wip', action: 'release_qc', code: 'wip.release_qc' },
+  { module: 'parts_requisitions', action: 'create', code: 'parts_requisitions.create' },
+  { module: 'parts_requisitions', action: 'approve', code: 'parts_requisitions.approve' },
+  { module: 'inventory', action: 'return', code: 'inventory.return' },
+  { module: 'inventory', action: 'adjust', code: 'inventory.adjust' },
+  { module: 'supplementary_estimates', action: 'create', code: 'supplementary_estimates.create' },
+  { module: 'job_cards', action: 'revise', code: 'job_cards.revise' },
+  { module: 'qc', action: 'view', code: 'qc.view' },
+  { module: 'qc', action: 'assign', code: 'qc.assign' },
+  { module: 'qc', action: 'start', code: 'qc.start' },
+  { module: 'qc', action: 'edit', code: 'qc.edit' },
+  { module: 'qc', action: 'submit', code: 'qc.submit' },
+  { module: 'qc', action: 'pass', code: 'qc.pass' },
+  { module: 'qc', action: 'fail', code: 'qc.fail' },
+  { module: 'qc', action: 'rework', code: 'qc.rework' },
+  { module: 'qc', action: 'print', code: 'qc.print' },
+  { module: 'qc', action: 'release_invoice', code: 'qc.release_invoice' },
+  { module: 'billing', action: 'issue', code: 'billing.issue' },
+  { module: 'gate_pass', action: 'issue', code: 'gate_pass.issue' },
+  { module: 'deliveries', action: 'complete', code: 'deliveries.complete' },
+  { module: 'feedback', action: 'create', code: 'feedback.create' },
 ]
 
 const MASTER_SEED = [
@@ -63,6 +116,13 @@ const MASTER_SEED = [
   { category: 'BOOKING_SOURCE', code: 'PHONE', label: 'Phone', sortOrder: 2 },
   { category: 'BOOKING_SOURCE', code: 'WHATSAPP', label: 'WhatsApp', sortOrder: 3 },
   { category: 'BOOKING_SOURCE', code: 'WEBSITE', label: 'Website', sortOrder: 4 },
+  { category: 'APPROVAL_SOURCE', code: 'IN_PERSON', label: 'In person', sortOrder: 1 },
+  { category: 'APPROVAL_SOURCE', code: 'PHONE_CALL', label: 'Phone call', sortOrder: 2 },
+  { category: 'APPROVAL_SOURCE', code: 'WHATSAPP', label: 'WhatsApp', sortOrder: 3 },
+  { category: 'APPROVAL_SOURCE', code: 'EMAIL', label: 'Email', sortOrder: 4 },
+  { category: 'APPROVAL_SOURCE', code: 'CUSTOMER_PORTAL', label: 'Customer portal', sortOrder: 5 },
+  { category: 'APPROVAL_SOURCE', code: 'SIGNED_DOCUMENT', label: 'Signed document', sortOrder: 6 },
+  { category: 'APPROVAL_SOURCE', code: 'OTHER', label: 'Other', sortOrder: 7 },
   { category: 'PAYMENT_MODE', code: 'CASH', label: 'Cash', sortOrder: 1 },
   { category: 'PAYMENT_MODE', code: 'UPI', label: 'UPI', sortOrder: 2 },
   { category: 'PAYMENT_MODE', code: 'CARD', label: 'Card', sortOrder: 3 },
@@ -71,6 +131,18 @@ const MASTER_SEED = [
   { category: 'COMPLAINT_TYPE', code: 'BRAKES', label: 'Brakes', sortOrder: 2 },
   { category: 'COMPLAINT_TYPE', code: 'AC', label: 'AC / Cooling', sortOrder: 3 },
   { category: 'COMPLAINT_TYPE', code: 'ELECTRICAL', label: 'Electrical', sortOrder: 4 },
+  { category: 'INVENTORY_DOCUMENT', code: 'RC', label: 'Registration Certificate', sortOrder: 1 },
+  { category: 'INVENTORY_DOCUMENT', code: 'INSURANCE', label: 'Insurance Copy', sortOrder: 2 },
+  { category: 'INVENTORY_KEY', code: 'PRIMARY_KEY', label: 'Primary Key', sortOrder: 1 },
+  { category: 'INVENTORY_KEY', code: 'SPARE_KEY', label: 'Spare Key', sortOrder: 2 },
+  { category: 'INVENTORY_TOOL', code: 'JACK_TOOLKIT', label: 'Jack & Tool Kit', sortOrder: 1 },
+  { category: 'INVENTORY_ACCESSORY', code: 'FLOOR_MATS', label: 'Floor Mats', sortOrder: 1 },
+  { category: 'INVENTORY_ACCESSORY', code: 'MUSIC_SYSTEM', label: 'Music System / Infotainment', sortOrder: 2 },
+  { category: 'INSPECTION_ITEM', code: 'ENG_OIL', label: 'Engine oil level & condition', parentCode: 'Engine', sortOrder: 1, metadata: { method: 'Visual', inputType: 'dropdown' } },
+  { category: 'INSPECTION_ITEM', code: 'BRK_PAD', label: 'Brake pad thickness', parentCode: 'Braking', sortOrder: 2, metadata: { method: 'Visual', required: true } },
+  { category: 'INSPECTION_ITEM', code: 'TYRE', label: 'Tyre tread & damage', parentCode: 'Tyres / Wheels', sortOrder: 3, metadata: { method: 'Visual' } },
+  { category: 'VEHICLE_CATEGORY', code: 'PASSENGER_CAR', label: 'Passenger Car', sortOrder: 1 },
+  { category: 'VEHICLE_CATEGORY', code: 'SUV', label: 'SUV', sortOrder: 2 },
 ]
 
 async function main() {
@@ -83,6 +155,7 @@ async function main() {
   const allPermissions = await Permission.find().lean()
   console.log(`✓ ${allPermissions.length} permissions`)
 
+  const allPermCodes = allPermissions.map((p) => p.code)
   let superAdminRole = await Role.findOne({ code: 'SUPER_ADMIN', tenantId: null })
   if (!superAdminRole) {
     superAdminRole = await Role.create({
@@ -90,8 +163,10 @@ async function main() {
       code: 'SUPER_ADMIN',
       description: 'Platform-level super administrator',
       isSystem: true,
-      permissionCodes: allPermissions.map((p) => p.code),
+      permissionCodes: allPermCodes,
     })
+  } else {
+    await Role.updateOne({ _id: superAdminRole._id }, { $set: { permissionCodes: allPermCodes } })
   }
 
   const passwordHash = await bcrypt.hash('demo1234', 12)
@@ -146,6 +221,21 @@ async function main() {
     { module: 'SERVICE_VISIT', prefix: 'SV' },
     { module: 'CUSTOMER', prefix: 'CUS' },
     { module: 'JOB_CARD', prefix: 'JC' },
+    { module: 'INSPECTION', prefix: 'INSP' },
+    { module: 'ESTIMATE', prefix: 'EST' },
+    { module: 'CUSTOMER_APPROVAL', prefix: 'APR' },
+    { module: 'ADVANCE_PAYMENT', prefix: 'ADV' },
+    { module: 'RECEIPT', prefix: 'RCP' },
+    { module: 'PARTS_REQUISITION', prefix: 'PR' },
+    { module: 'STOCK_ISSUE', prefix: 'SI' },
+    { module: 'STOCK_RETURN', prefix: 'SR' },
+    { module: 'ADDITIONAL_WORK', prefix: 'AWR' },
+    { module: 'QUALITY_CONTROL', prefix: 'QC' },
+    { module: 'QC_REWORK', prefix: 'QRW' },
+    { module: 'FINAL_INVOICE', prefix: 'INV' },
+    { module: 'CREDIT_NOTE', prefix: 'CN' },
+    { module: 'GATE_PASS', prefix: 'GP' },
+    { module: 'INVOICE_PAYMENT', prefix: 'IPAY' },
   ]
   for (const s of seriesModules) {
     await NumberingSeries.updateOne(
@@ -156,12 +246,43 @@ async function main() {
   }
 
   const roleDefs = [
-    { code: 'OWNER', name: 'Owner', perms: allPermissions.map((p) => p.code) },
-    { code: 'WORKSHOP_MANAGER', name: 'Workshop Manager', perms: allPermissions.map((p) => p.code) },
-    { code: 'SERVICE_ADVISOR', name: 'Service Advisor', perms: ['dashboard.view', 'bookings.view', 'bookings.create', 'bookings.edit', 'service_visits.view', 'service_visits.edit', 'estimates.view', 'estimates.create', 'job_cards.view', 'crm.view', 'crm.edit'] },
-    { code: 'TECHNICIAN', name: 'Technician', perms: ['dashboard.view', 'service_visits.view', 'job_cards.view', 'job_cards.edit', 'inventory.view'] },
-    { code: 'PARTS_MANAGER', name: 'Parts Manager', perms: ['dashboard.view', 'inventory.view', 'inventory.issue', 'reports.view'] },
-    { code: 'CASHIER', name: 'Cashier', perms: ['dashboard.view', 'billing.view', 'billing.create'] },
+    { code: 'OWNER', name: 'Owner', perms: allPermCodes },
+    { code: 'WORKSHOP_MANAGER', name: 'Workshop Manager', perms: allPermCodes },
+    {
+      code: 'WORKSHOP_EXECUTIVE',
+      name: 'Workshop Executive',
+      perms: [
+        'dashboard.view',
+        'service_visits.view',
+        'inspections.view', 'inspections.edit',
+        'job_cards.view', 'job_cards.create', 'job_cards.assign', 'job_cards.release', 'job_cards.print',
+        'wip.view', 'qc.view',
+        'delivery_commitments.create', 'delivery_commitments.revise',
+        'approvals.view',
+      ],
+    },
+    {
+      code: 'SERVICE_ADVISOR',
+      name: 'Service Advisor',
+      perms: [
+        'dashboard.view',
+        'bookings.view', 'bookings.create', 'bookings.edit',
+        'service_visits.view', 'service_visits.edit',
+        'inspections.view', 'inspections.edit',
+        'estimates.view', 'estimates.create',
+        'approvals.view', 'approvals.record',
+        'payments.view', 'payments.record', 'payments.share',
+        'customers.credit.view',
+        'job_cards.view', 'job_cards.create',
+        'wip.view', 'qc.view',
+        'billing.view',
+        'crm.view', 'crm.edit',
+      ],
+    },
+    { code: 'INSPECTOR', name: 'Inspector', perms: ['dashboard.view', 'service_visits.view', 'inspections.view', 'inspections.edit', 'qc.view', 'qc.start', 'qc.edit', 'qc.submit', 'qc.pass', 'qc.fail', 'qc.rework', 'qc.print', 'job_cards.view', 'wip.view'] },
+    { code: 'TECHNICIAN', name: 'Technician', perms: ['dashboard.view', 'service_visits.view', 'job_cards.view', 'wip.view', 'wip.update', 'wip.complete', 'wip.raise_additional_work', 'parts_requisitions.create', 'inventory.view', 'inspections.view', 'inspections.edit'] },
+    { code: 'PARTS_MANAGER', name: 'Parts Manager', perms: ['dashboard.view', 'inventory.view', 'inventory.issue', 'inventory.return', 'parts_requisitions.approve', 'parts_requisitions.create', 'reports.view'] },
+    { code: 'CASHIER', name: 'Cashier', perms: ['dashboard.view', 'billing.view', 'billing.create', 'payments.view', 'payments.record', 'payments.verify', 'payments.share', 'approvals.view'] },
     { code: 'CRM_EXECUTIVE', name: 'CRM Executive', perms: ['dashboard.view', 'crm.view', 'crm.edit', 'bookings.view'] },
   ]
 
@@ -176,6 +297,11 @@ async function main() {
         isSystem: true,
         permissionCodes: rd.perms,
       })
+    } else {
+      await Role.updateOne(
+        { _id: role._id },
+        { $set: { name: rd.name, permissionCodes: rd.perms, isSystem: true } },
+      )
     }
     roles[rd.code] = role._id.toString()
   }
@@ -289,6 +415,7 @@ async function main() {
           tenantId: tenant._id,
           partId: part._id,
           warehouseId: warehouse._id,
+          onHand: Math.floor(Math.random() * 50) + 5,
           available: Math.floor(Math.random() * 50) + 5,
           reorderLevel: 5,
         },
@@ -380,6 +507,191 @@ async function main() {
     )
   }
   console.log(`✓ ${MASTER_SEED.length} master data items (dropdowns)`)
+
+  const now = new Date()
+  await TaxRule.updateOne(
+    { tenantId: tenant._id, ruleName: 'GST 18% Workshop SAC' },
+    {
+      $set: {
+        tenantId: tenant._id,
+        ruleName: 'GST 18% Workshop SAC',
+        hsnSac: '998729',
+        goodsServiceCategory: 'LABOUR',
+        gstPercent: 18,
+        cgstPercent: 9,
+        sgstPercent: 9,
+        igstPercent: 18,
+        taxInclusive: false,
+        effectiveFrom: new Date('2020-01-01'),
+        jurisdiction: 'IN',
+        active: true,
+        approvalStatus: 'APPROVED',
+        legalReference: 'Configurable — verify with tax advisor',
+      },
+    },
+    { upsert: true },
+  )
+  await TaxRule.updateOne(
+    { tenantId: tenant._id, ruleName: 'EV 45% REQUESTED NOT APPROVED' },
+    {
+      $set: {
+        tenantId: tenant._id,
+        ruleName: 'EV 45% REQUESTED NOT APPROVED',
+        hsnSac: '998729-EV',
+        gstPercent: 45,
+        active: false,
+        approvalStatus: 'PENDING',
+        effectiveFrom: now,
+        remarks: 'Not selectable until legal/tax admin approval',
+      },
+    },
+    { upsert: true },
+  )
+  await TaxRule.updateOne(
+    { tenantId: tenant._id, ruleName: 'GST 18% Parts HSN 8708' },
+    {
+      $set: {
+        tenantId: tenant._id,
+        ruleName: 'GST 18% Parts HSN 8708',
+        hsnSac: '87089900',
+        goodsServiceCategory: 'PARTS',
+        gstPercent: 18,
+        cgstPercent: 9,
+        sgstPercent: 9,
+        igstPercent: 18,
+        effectiveFrom: new Date('2020-01-01'),
+        active: true,
+        approvalStatus: 'APPROVED',
+      },
+    },
+    { upsert: true },
+  )
+  await DiscountPolicy.updateOne(
+    { tenantId: tenant._id, code: 'WELCOME10' },
+    {
+      $set: {
+        tenantId: tenant._id,
+        code: 'WELCOME10',
+        name: 'Welcome 10%',
+        discountType: 'PERCENTAGE',
+        discountValue: 10,
+        maxDiscountCap: 2000,
+        active: true,
+        beforeTax: true,
+        approvalRequired: false,
+      },
+    },
+    { upsert: true },
+  )
+  console.log('✓ Tax rules and discount policies')
+
+  await PaymentPolicy.updateOne(
+    { tenantId: tenant._id, code: 'ADVANCE_OPTIONAL' },
+    {
+      $set: {
+        tenantId: tenant._id,
+        code: 'ADVANCE_OPTIONAL',
+        name: 'Advance optional',
+        allowZeroAdvance: true,
+        minimumAdvanceType: 'NONE',
+        creditEligibilityRequired: false,
+        creditExposureCheck: true,
+        active: true,
+        effectiveFrom: new Date('2020-01-01'),
+      },
+    },
+    { upsert: true },
+  )
+  await PaymentPolicy.updateOne(
+    { tenantId: tenant._id, code: 'CREDIT_CUSTOMER' },
+    {
+      $set: {
+        tenantId: tenant._id,
+        code: 'CREDIT_CUSTOMER',
+        name: 'Approved credit customer',
+        allowZeroAdvance: true,
+        minimumAdvanceType: 'NONE',
+        creditEligibilityRequired: true,
+        creditExposureCheck: true,
+        active: true,
+        effectiveFrom: new Date('2020-01-01'),
+      },
+    },
+    { upsert: true },
+  )
+  console.log('✓ Payment policies (Phase 4)')
+
+  const mainBranch = branches[0]
+  await WorkshopTeam.updateOne(
+    { tenantId: tenant._id, branchId: mainBranch._id, teamCode: 'MECH-A' },
+    {
+      $set: {
+        tenantId: tenant._id,
+        branchId: mainBranch._id,
+        teamCode: 'MECH-A',
+        name: 'Mechanical Team A',
+        specialization: 'MECHANICAL',
+        capacity: 6,
+        isActive: true,
+      },
+    },
+    { upsert: true },
+  )
+  await WorkshopTeam.updateOne(
+    { tenantId: tenant._id, branchId: mainBranch._id, teamCode: 'ELEC-A' },
+    {
+      $set: {
+        tenantId: tenant._id,
+        branchId: mainBranch._id,
+        teamCode: 'ELEC-A',
+        name: 'Electrical Team A',
+        specialization: 'ELECTRICAL',
+        capacity: 4,
+        isActive: true,
+      },
+    },
+    { upsert: true },
+  )
+  const branchBays = await Bay.find({ tenantId: tenant._id, branchId: mainBranch._id }).lean()
+  for (const bay of branchBays) {
+    await WorkshopLocation.updateOne(
+      { tenantId: tenant._id, branchId: mainBranch._id, code: bay.code },
+      {
+        $set: {
+          tenantId: tenant._id,
+          branchId: mainBranch._id,
+          locationType: 'BAY',
+          code: bay.code,
+          name: bay.name,
+          bayId: bay._id,
+          exclusiveUse: true,
+          capacity: 1,
+          isActive: true,
+          operationalStatus: 'AVAILABLE',
+        },
+      },
+      { upsert: true },
+    )
+  }
+  await WorkshopLocation.updateOne(
+    { tenantId: tenant._id, branchId: mainBranch._id, code: 'OUTDOOR-1' },
+    {
+      $set: {
+        tenantId: tenant._id,
+        branchId: mainBranch._id,
+        locationType: 'EXTRA_SPACE',
+        code: 'OUTDOOR-1',
+        name: 'Outdoor work area',
+        description: 'General repair extra space',
+        allowedWorkTypes: ['MECHANICAL', 'ELECTRICAL'],
+        capacity: 2,
+        exclusiveUse: false,
+        isActive: true,
+      },
+    },
+    { upsert: true },
+  )
+  console.log('✓ Workshop teams & locations (Phase 5)')
 
   console.log('\n✅ MongoDB seed completed!\n')
   console.log('Demo Login:')

@@ -19,6 +19,7 @@ export function configureCloudinary() {
 export { cloudinary }
 
 export function isCloudinaryConfigured() {
+  if (!env.CLOUDINARY_ENABLED) return false
   return Boolean(
     env.CLOUDINARY_CLOUD_NAME &&
     env.CLOUDINARY_API_KEY &&

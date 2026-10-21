@@ -28,7 +28,7 @@ function signAccessToken(userId: string, tenantId: string | null) {
 
 function signRefreshToken(userId: string, tenantId: string | null) {
   return jwt.sign(
-    { sub: userId, tenantId, type: 'refresh' } satisfies JwtPayload,
+    { sub: userId, tenantId, type: 'refresh', jti: crypto.randomUUID() } satisfies JwtPayload,
     env.JWT_REFRESH_SECRET,
     { expiresIn: env.JWT_REFRESH_EXPIRES_IN as jwt.SignOptions['expiresIn'] },
   )

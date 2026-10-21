@@ -10,6 +10,8 @@ interface UploadOptions {
   tags?: string[]
   entityType?: string
   entityId?: string
+  imageCategory?: string
+  remarks?: string
 }
 
 function bufferToStream(buffer: Buffer) {
@@ -60,10 +62,12 @@ export async function uploadImageBuffer(
 
   const media = await Media.create({
     tenantId,
+    branchId: req.branchId,
     uploadedBy: req.user?.id,
     url: result.secure_url,
     publicId: result.public_id,
     resourceType: result.resource_type,
+    imageCategory: options.imageCategory,
     format: result.format,
     bytes: result.bytes,
     width: result.width,
@@ -72,6 +76,7 @@ export async function uploadImageBuffer(
     tags: options.tags,
     entityType: options.entityType,
     entityId: options.entityId,
+    remarks: options.remarks,
   })
 
   return {

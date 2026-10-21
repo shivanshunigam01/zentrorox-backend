@@ -7,6 +7,7 @@ interface ListParams {
   page?: number
   limit?: number
 }
+// limit supported on listParts
 
 export async function listParts(req: Request, params: ListParams) {
   const tenantId = req.tenantId!
@@ -80,6 +81,7 @@ export async function listStock(req: Request, params: ListParams) {
         brand: part?.brand,
         mrp: part?.mrp,
         warehouse: warehouse?.name ?? '—',
+        warehouseId: s.warehouseId?.toString(),
         available: s.available,
         reserved: s.reserved,
         reorderLevel: s.reorderLevel,
@@ -88,6 +90,11 @@ export async function listStock(req: Request, params: ListParams) {
     }),
     pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
   }
+}
+
+export async function listWarehouses(req: Request) {
+  const rows = await Warehouse.find({ tenantId: req.tenantId!, isActive: true }).sort({ code: 1 }).lean()
+  return rows.map((w) => ({ id: w._id.toString(), code: w.code, name: w.name }))
 }
 
 export async function getPartsDashboard(req: Request) {
