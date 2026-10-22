@@ -14,6 +14,8 @@ const envSchema = z.object({
   CORS_ORIGIN: z.string().default('http://localhost:5173'),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().default(900000),
   RATE_LIMIT_MAX: z.coerce.number().default(200),
+  /** Hops behind reverse proxy (Nginx). Set 0 for direct local access only. */
+  TRUST_PROXY: z.coerce.number().int().min(0).max(5).default(1),
   CLOUDINARY_ENABLED: z
     .string()
     .optional()
