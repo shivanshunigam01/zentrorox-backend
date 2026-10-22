@@ -7,6 +7,7 @@ import { UnauthorizedError, ValidationError } from '../../utils/errors.js'
 import { createAuditLog } from '../../utils/audit.js'
 import type { Request } from 'express'
 import type { JwtPayload } from '../../types/express.js'
+import { normalizeTenantCode } from './tenant-code.js'
 
 const MAX_FAILED_LOGINS = 5
 const LOCK_DURATION_MS = 15 * 60 * 1000
@@ -35,7 +36,8 @@ function signRefreshToken(userId: string, tenantId: string | null) {
 }
 
 export async function login(input: LoginInput, req?: Request) {
-  const tenant = await Tenant.findOne({ code: input.tenantCode.toUpperCase() }).lean()
+  const tenantCode = normalizeTenantCode(input.tenantCode)
+  const tenant = await Tenant.findOne({ code: tenantCode }).lean()
   if (!tenant || tenant.status !== 'ACTIVE') {
     throw new UnauthorizedError('Invalid organization code or account suspended')
   }
